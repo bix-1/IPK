@@ -46,7 +46,10 @@ data = fserver.recv(BUFFER_SIZE).decode("utf-8")
 # get contents of file
 N = int(re.search("Length:(.+?)\n", data).group(1))
 fserver.send(b"GET %s FSP/1.0\r\nHostname: %s\r\nAgent: xbartk07\r\n\r\n" % (filename.encode(), fs_name.encode()))
-data = fserver.recv(N).decode("utf-8")
+data = fserver.recv(N)
 fserver.close()
 
-print(data, end="")
+# write down received data
+file = open(filename, "wb")
+file.write(data)
+file.close()

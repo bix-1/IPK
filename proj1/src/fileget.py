@@ -15,7 +15,7 @@ def recvall(sock):
     if b"Not Found" in tmp[0]:
         sys.exit("ERROR: File not found")
     received = [tmp[2]]
-    remaining = int(tmp[1].decode("utf-8")) - len(received)
+    remaining = int(tmp[1].decode("utf-8")) - len(tmp[2])
 
     while remaining > 0:
         data = sock.recv(min(remaining, buf_size))
@@ -24,6 +24,14 @@ def recvall(sock):
 
     return b"".join(received)
 
+
+def get(server, servername, filename):
+    server.send(b"GET %s FSP/1.0\r\nHostname: %s\r\nAgent: xbartk07\r\n\r\n" % (filename.encode(), servername.encode()))
+    return recvall(fserver)
+
+
+def get_all(server, servername, filename):
+    return b"cock!"
 
 # define command line arguments
 aparser = argparse.ArgumentParser(description="Distributed Filesystem Client.")
@@ -42,14 +50,12 @@ ns_ip, ns_port = args.nameserver.split(":")
 ns_port = int(ns_port)
 protocol, fs_name, filename = re.split("://|/", args.fileinfo, maxsplit=2)
 
-# print(args.fileinfo)
-# sys.exit()
-
-# check CL args
+# check protocol
 if protocol != "fsp":
     sys.exit("ERROR: Invalid protocol \"%s\"" %protocol)
 
-"""_____get IP & port of file server_____"""
+
+"""_____get IP address & port of file server_____"""
 # send request to name server using UDP
 nserver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 nserver.sendto(b"WHEREIS " + str.encode(fs_name), (ns_ip, ns_port))
@@ -58,20 +64,20 @@ data, _ = nserver.recvfrom(ns_port)
 nserver.close()
 # parse reply
 status, fs_ip, fs_port = re.split(" |:", data.decode("utf-8"))
-fs_port = int(fs_port)
 if status != "OK":
     sys.exit("ERROR: Failed to find server \"%s\"" % fs_name)
+fs_port = int(fs_port)
 
-"""_____get file from file server_____"""
-# send request to file server using TCP
+
+"""_____get file(s) from file server_____"""
 fserver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 fserver.connect((fs_ip, fs_port))
-fserver.send(b"GET %s FSP/1.0\r\nHostname: %s\r\nAgent: xbartk07\r\n\r\n" % (filename.encode(), fs_name.encode()))
-# receive all packets
-contents = recvall(fserver)
-fserver.close()
+if filename == "*":
+    contents = get_all(fserver, fs_name, filename)
+else:
+    contents = get(fserver, fs_name, filename)
 
 # output contents to file
 file = open(filename, "wb")
-file.write(contents + b"\n")
+file.write(contents)
 file.close()

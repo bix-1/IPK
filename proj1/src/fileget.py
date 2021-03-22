@@ -18,6 +18,9 @@ def recvall(sock):
     tmp = re.split(b"Length:\s*|\r\n\r\n", data)
     if b"Not Found" in tmp[0]:
         Exit("ERROR: File not found")
+    elif b"Success" not in tmp[0]:
+        Exit("ERROR: Failed to get file from server")
+
     if len(tmp) < 2:    # header + empty message
         tmp.append(b"")
     received = [tmp[2]]
@@ -44,7 +47,7 @@ def get(address, servername, filename):
             contents = recvall(fserver)
         except socket.timeout:
             fserver.close()
-            Exit("Failed to reach nameserver")
+            Exit("ERROR: Failed to reach nameserver")
 
     # output contents to file
     file = open(filename, "wb")
@@ -66,7 +69,7 @@ def get_all(address, servername):
             files = [x for x in recvall(fserver).decode().split("\r\n") if x != ""]
         except socket.timeout:
             fserver.close()
-            Exit("Failed to reach nameserver")
+            Exit("ERROR: Failed to reach nameserver")
 
     for file in files:
         # create path for file
@@ -89,7 +92,22 @@ def get_args():
         required = True,
         help="SURL of file to be downloaded; Protocol in URL is always fsp")
 
-    return aparser.parse_args()
+    args = aparser.parse_args()
+    # validate nameserver address
+    addr = args.nameserver.split(":")
+    if (len(addr) < 2) or (not addr[1].isdigit()):
+        Exit("ERROR: Invalid nameserver address")
+    try:
+        socket.inet_aton(addr[0])
+    except socket.error:
+        Exit("ERROR: Invalid nameserver address")
+
+    # validate fileserver SURL
+    surl = re.split("://|/", args.fileinfo, maxsplit=2)
+    if (len(surl) < 3) or (surl[0] != "fsp"):
+        Exit("ERROR: Invalid SURL of file server")
+
+    return args
 
 
 def main():
@@ -98,10 +116,6 @@ def main():
     ns_ip, ns_port = args.nameserver.split(":")
     ns_port = int(ns_port)
     protocol, fs_name, filename = re.split("://|/", args.fileinfo, maxsplit=2)
-    # check protocol
-    if protocol != "fsp":
-        Exit("ERROR: Invalid protocol \"%s\" -- must be \"fsp\"" %protocol)
-
 
     """_____get IP address & port of file server_____"""
     # send request to nameserver using UDP
@@ -112,13 +126,12 @@ def main():
             data, _ = nserver.recvfrom(ns_port)
         except socket.timeout:
             nserver.close()
-            Exit("Failed to reach nameserver")
+            Exit("ERROR: Failed to reach nameserver")
     # parse reply
     status, fs_ip, fs_port = re.split(" |:", data.decode())
     if status != "OK":
         Exit("ERROR: Failed to find server \"%s\"" % fs_name)
     fs_port = int(fs_port)
-
 
     """_____get file(s) from file server_____"""
     if filename == "*":

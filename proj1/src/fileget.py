@@ -15,7 +15,7 @@ def recvall(sock):
     if b"Not Found" in tmp[0]:
         sys.exit("ERROR: File not found")
     received = [tmp[2]]
-    remaining = int(tmp[1].decode("utf-8")) - len(tmp[2])
+    remaining = int(tmp[1].decode()) - len(tmp[2])
 
     while remaining > 0:
         data = sock.recv(min(remaining, buf_size))
@@ -27,11 +27,21 @@ def recvall(sock):
 
 def get(server, servername, filename):
     server.send(b"GET %s FSP/1.0\r\nHostname: %s\r\nAgent: xbartk07\r\n\r\n" % (filename.encode(), servername.encode()))
-    return recvall(fserver)
+    contents = recvall(server)
+    # output contents to file
+    file = open(filename, "wb")
+    file.write(contents)
+    file.close()
 
 
-def get_all(server, servername, filename):
-    return b"cock!"
+def get_all(server, servername):
+    # get index file
+    server.send(b"GET %s FSP/1.0\r\nHostname: %s\r\nAgent: xbartk07\r\n\r\n" % ("index".encode(), servername.encode()))
+    files = [x for x in recvall(server).decode().split("\r\n") if x != ""]
+    print(files)
+    # for file in files:
+    #     get(server, servername, file)
+
 
 # define command line arguments
 aparser = argparse.ArgumentParser(description="Distributed Filesystem Client.")
@@ -56,28 +66,26 @@ if protocol != "fsp":
 
 
 """_____get IP address & port of file server_____"""
-# send request to name server using UDP
-nserver = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-nserver.sendto(b"WHEREIS " + str.encode(fs_name), (ns_ip, ns_port))
-# receive reply
-data, _ = nserver.recvfrom(ns_port)
-nserver.close()
+# send request to nameserver using UDP
+with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as nserver:
+    try:
+        nserver.sendto(b"WHEREIS " + str.encode(fs_name), (ns_ip, ns_port))
+        nserver.settimeout(2)
+        data, _ = nserver.recvfrom(ns_port)
+    except socket.timeout:
+        nserver.close()
+        sys.exit("Failed to reach nameserver")
 # parse reply
-status, fs_ip, fs_port = re.split(" |:", data.decode("utf-8"))
+status, fs_ip, fs_port = re.split(" |:", data.decode())
 if status != "OK":
     sys.exit("ERROR: Failed to find server \"%s\"" % fs_name)
 fs_port = int(fs_port)
 
 
 """_____get file(s) from file server_____"""
-fserver = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-fserver.connect((fs_ip, fs_port))
-if filename == "*":
-    contents = get_all(fserver, fs_name, filename)
-else:
-    contents = get(fserver, fs_name, filename)
-
-# output contents to file
-file = open(filename, "wb")
-file.write(contents)
-file.close()
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as fserver:
+    fserver.connect((fs_ip, fs_port))
+    if filename == "*":
+        get_all(fserver, fs_name)
+    else:
+        get(fserver, fs_name, filename)

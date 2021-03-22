@@ -1,13 +1,14 @@
 .PHONY: start tests testAll clean
 
+NAMESERVER = 127.0.0.2:42000
+FILESERVER = file.server.one
+
 start:
-	../server_src/fsptest -p  127.0.0.2:42000 -r ../nameserver/
+	../server_src/fsptest -p  $(NAMESERVER) -r ../nameserver/
 
 tests:
-	./fileget.py -n 127.0.0.2:42000 -f fsp://file.server.one/big && diff big ../nameserver/file.server.one/big
-
-testAll:
-	-cd testDir/ && ../fileget.py -n 127.0.0.2:42000 -f fsp://file.server.one/*
+	-cd testDir/ && ../fileget.py -n 127.0.0.2:42000 -f fsp://$(FILESERVER)/*
+	diff -r testDir/ ../nameserver/$(FILESERVER)/
 
 clean:
 	rm -rf big *.txt testDir/*

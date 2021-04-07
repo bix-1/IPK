@@ -4,59 +4,91 @@
  * @author Jakub Bartko <xbartk07@stud.fit.vutbr.cz>
  */
 
+/**
+ * TODO
+ *  citation for opt parsing??
+ */
 
+
+#include "ipk-sniffer.h"
 #include <iostream>
 #include <getopt.h>
+#include <string>
+#include <cstring>
 
 using namespace std;
 
+
+int main(int argc, char * argv[]) {
+    get_opts(argc, argv);
+
+    if (handles.interface[0] == '\0') {
+        cout << "Get interfaces...\n";
+    }
+    else {
+        cout << "Interface: " << handles.interface << endl;
+    }
+
+    return 0;
+}
 
 void error(string msg) {
     cerr << "ERROR: " << msg << std::endl;
     exit(EXIT_FAILURE);
 }
 
-
-int main(int argc, char * argv[]) {
+void get_opts(int argc, char * argv[]) {
     opterr = 0; // disable getopt error call
     // define CL options
     static struct option long_options[] = {
         {"interface", optional_argument, 0, 'i'},
+        {"tcp", no_argument, 0, 't'},
+        {"udp", no_argument, 0, 'u'},
+        {"arp", no_argument, 0, 'a'},
+        {"icmp", no_argument, 0, 'c'},
         {0, 0, 0, 0}
     };
 
     int opt, opt_index;
-    const char * interface = NULL;
     while(true) {
-        opt = getopt_long(argc, argv, "i::", long_options, &opt_index);
+        opt = getopt_long(argc, argv, "i::p:tun:", long_options, &opt_index);
         const char * arg = optarg;
         if (opt == -1) break;
         switch (opt) {
-            case 'i':
+            // opts with argument
+            case 'i': case 'p': case 'n':
                 // check if following opt might be current opt's argument
                 if (!optarg && argv[optind] != NULL && argv[optind][0] != '-') {
-                    arg = argv[optind];
+                    arg = argv[optind++];
                 }
-                if (arg)
-                    interface = arg;
-                else
-                    interface = "";
+                // handle opts
+                switch (opt) {
+                    case 'i':
+                        handles.interface = (arg) ? arg : "";
+                        break;
+                    case 'p':
+                        size_t i;
+                        if (!isdigit(arg[0])) error("Invalid port");
+                        handles.port = stoi(arg, &i);
+                        if (i < strlen(arg)) error("Invalid port");
+                        break;
+                    case 'n':
+                        if (!isdigit(arg[0])) error("Invalid port");
+                        handles.n = stoi(arg, &i);
+                        if (i < strlen(arg)) error("Invalid port");
+                        break;
+                }
                 break;
+            case 't': handles.tcp = true;   break;
+            case 'u': handles.udp = true;   break;
+            case 'a': handles.arp = true;   break;
+            case 'c': handles.icmp = true;  break;
 
             default:
                 error("Invalid CL argument");
         }
     }
-
-    if (!interface) {
-        error("Missing --interface option");
-    }
-    else if (interface[0] == '\0') {
-        cout << "Get interfaces...\n";
-    }
-    else {
-        cout << "Interface: " << interface << endl;
-    }
-
-    return 0;
+    // validation
+    if (optind < argc) error("Invalid arguments");
+    if (!handles.interface) error("Missing --interface option");
 }

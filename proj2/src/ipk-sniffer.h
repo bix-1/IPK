@@ -13,11 +13,7 @@ void error(const char * msg);
 
 struct Opts {
     const char * interface = NULL;
-    int port = -1;
-    bool tcp = false;
-    bool udp = false;
-    bool arp = false;
-    bool icmp = false;
+    std::string filter = "";
     int n = 1;
 } opts;
 

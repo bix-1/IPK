@@ -6,7 +6,7 @@
 
 /**
  * TODO
- *  citation for opt parsing??
+ * 
  */
 
 
@@ -52,6 +52,8 @@ int main(int argc, char * argv[]) {
     else {
         // get handle for reading
         pcap_t * handle = pcap_create(opts.interface, NULL);
+        struct bpf_program filter;
+
         if (handle == NULL) error("Failed to open handle");
         pcap_set_promisc(handle, true);
         if (pcap_activate(handle) != 0) {
@@ -59,8 +61,10 @@ int main(int argc, char * argv[]) {
             error("Failed to activate handle");
         }
 
+        cout << opts.filter.c_str() << endl;
+        pcap_compile(handle, &filter, opts.filter.c_str(), 1, 0);
+        pcap_setfilter(handle, &filter);
         pcap_loop(handle, opts.n, process_packet, NULL);
-
         pcap_close(handle);
     }
 
@@ -104,22 +108,23 @@ void get_opts(int argc, char * argv[]) {
                         opts.interface = (arg) ? arg : "";
                         break;
                     case 'p':
-                        size_t i;
-                        if (!isdigit(arg[0])) error("Invalid port");
-                        opts.port = stoi(arg, &i);
-                        if (i < strlen(arg)) error("Invalid port");
+                        opts.filter += "port ";
+                        opts.filter += arg;
+                        opts.filter += " ";
                         break;
                     case 'n':
+                        size_t i;
                         if (!isdigit(arg[0])) error("Invalid port");
                         opts.n = stoi(arg, &i);
                         if (i < strlen(arg)) error("Invalid port");
                         break;
                 }
                 break;
-            case 't': opts.tcp = true;   break;
-            case 'u': opts.udp = true;   break;
-            case 'a': opts.arp = true;   break;
-            case 'c': opts.icmp = true;  break;
+            case 't': opts.filter += "tcp ";   break;
+            case 'u': opts.filter += "udp ";   break;
+            case 'a': opts.filter += "arp ";   break;
+            case 'c': opts.filter += "icmp ";   break;
+
 
             default:
                 error("Invalid CL argument");
@@ -130,6 +135,34 @@ void get_opts(int argc, char * argv[]) {
     if (!opts.interface) error("Missing --interface option");
 }
 
+
+int icmp = 0, igmp = 0, tcp = 0, udp = 0, others = 0, total = 0;
 void process_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes) {
-    cout << "ye" << endl;
+    total++;
+    int size = header->len;
+	//Get the IP Header part of this packet , excluding the ethernet header
+	struct iphdr *iph = (struct iphdr*)(bytes + sizeof(struct ethhdr));
+	switch (iph->protocol) //Check the Protocol and do accordingly...
+	{
+		case 1:  //ICMP Protocol
+			++icmp;
+			break;
+
+		case 2:  //IGMP Protocol
+			++igmp;
+			break;
+
+		case 6:  //TCP Protocol
+			++tcp;
+			break;
+
+		case 17: //UDP Protocol
+			++udp;
+			break;
+
+		default: //Some Other Protocol like ARP etc.
+			++others;
+			break;
+	}
+	printf("TCP : %d   UDP : %d   ICMP : %d   IGMP : %d   Others : %d   Total : %d\n", tcp , udp , icmp , igmp , others , total);
 }

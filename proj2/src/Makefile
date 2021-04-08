@@ -8,7 +8,7 @@ run: $(EXEC)
 	./$(EXEC)
 
 $(EXEC): $(EXEC).cpp
-	$(CXX) $(CXX_FLAGS) $^ -o $@
+	$(CXX) $(CXX_FLAGS) $^ -o $@ -lpcap
 
 clean:
 	rm -f $(EXEC)

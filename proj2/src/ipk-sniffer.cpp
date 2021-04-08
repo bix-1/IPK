@@ -12,30 +12,56 @@
 
 #include "ipk-sniffer.h"
 #include <iostream>
-#include <getopt.h>
 #include <string>
 #include <cstring>
+#include <getopt.h>
+#include <pcap.h>
+
+#include <netinet/ip.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/if_ether.h>
+#include <netinet/ip6.h>
+
 
 using namespace std;
 
 
 int main(int argc, char * argv[]) {
+    // get CL options
     get_opts(argc, argv);
 
     if (handles.interface[0] == '\0') {
-        cout << "Get interfaces...\n";
-    }
-    else {
+        // get all devices
+        pcap_if_t * alldevs;
+        if (pcap_findalldevs(&alldevs, NULL) == PCAP_ERROR)
+            error("Failed to find devices");
+        // list add devices
+        int cnt = 0;
+        for (pcap_if_t * dev = alldevs; dev != NULL; dev = dev->next) {
+            cout << dev->name << endl;
+            cnt++;
+        }
+        // free list of devices
+        if (cnt == 0)
+            cout << "No devices found\n";
+        else
+            pcap_freealldevs(alldevs);
+    } else {
         cout << "Interface: " << handles.interface << endl;
+
     }
 
     return 0;
 }
 
+
 void error(string msg) {
     cerr << "ERROR: " << msg << std::endl;
     exit(EXIT_FAILURE);
 }
+
 
 void get_opts(int argc, char * argv[]) {
     opterr = 0; // disable getopt error call

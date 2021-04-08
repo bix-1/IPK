@@ -9,9 +9,9 @@
 
 #include <iostream>   // error()
 
-void error(std::string msg);
+void error(const char * msg);
 
-struct Handles {
+struct Opts {
     const char * interface = NULL;
     int port = -1;
     bool tcp = false;
@@ -19,8 +19,10 @@ struct Handles {
     bool arp = false;
     bool icmp = false;
     int n = 1;
-} handles;
+} opts;
 
-void get_opts(int argc, char * argv[]);
+void get_opts(int argc, char *argv[]);
+
+void process_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes);
 
 #endif

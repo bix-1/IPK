@@ -32,7 +32,7 @@ int main(int argc, char * argv[]) {
     // get CL options
     get_opts(argc, argv);
 
-    if (handles.interface[0] == '\0') {
+    if (opts.interface[0] == '\0') {
         // get all devices
         pcap_if_t * alldevs;
         if (pcap_findalldevs(&alldevs, NULL) == PCAP_ERROR)
@@ -48,17 +48,28 @@ int main(int argc, char * argv[]) {
             cout << "No devices found\n";
         else
             pcap_freealldevs(alldevs);
-    } else {
-        cout << "Interface: " << handles.interface << endl;
+    }
+    else {
+        // get handle for reading
+        pcap_t * handle = pcap_create(opts.interface, NULL);
+        if (handle == NULL) error("Failed to open handle");
+        pcap_set_promisc(handle, true);
+        if (pcap_activate(handle) != 0) {
+            pcap_close(handle);
+            error("Failed to activate handle");
+        }
 
+        pcap_loop(handle, opts.n, process_packet, NULL);
+
+        pcap_close(handle);
     }
 
     return 0;
 }
 
 
-void error(string msg) {
-    cerr << "ERROR: " << msg << std::endl;
+void error(const char * msg) {
+    cerr << "ERROR: " << msg << endl;
     exit(EXIT_FAILURE);
 }
 
@@ -90,25 +101,25 @@ void get_opts(int argc, char * argv[]) {
                 // handle opts
                 switch (opt) {
                     case 'i':
-                        handles.interface = (arg) ? arg : "";
+                        opts.interface = (arg) ? arg : "";
                         break;
                     case 'p':
                         size_t i;
                         if (!isdigit(arg[0])) error("Invalid port");
-                        handles.port = stoi(arg, &i);
+                        opts.port = stoi(arg, &i);
                         if (i < strlen(arg)) error("Invalid port");
                         break;
                     case 'n':
                         if (!isdigit(arg[0])) error("Invalid port");
-                        handles.n = stoi(arg, &i);
+                        opts.n = stoi(arg, &i);
                         if (i < strlen(arg)) error("Invalid port");
                         break;
                 }
                 break;
-            case 't': handles.tcp = true;   break;
-            case 'u': handles.udp = true;   break;
-            case 'a': handles.arp = true;   break;
-            case 'c': handles.icmp = true;  break;
+            case 't': opts.tcp = true;   break;
+            case 'u': opts.udp = true;   break;
+            case 'a': opts.arp = true;   break;
+            case 'c': opts.icmp = true;  break;
 
             default:
                 error("Invalid CL argument");
@@ -116,5 +127,9 @@ void get_opts(int argc, char * argv[]) {
     }
     // validation
     if (optind < argc) error("Invalid arguments");
-    if (!handles.interface) error("Missing --interface option");
+    if (!opts.interface) error("Missing --interface option");
+}
+
+void process_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes) {
+    cout << "ye" << endl;
 }

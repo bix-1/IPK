@@ -18,11 +18,11 @@
 
 #include <pcap.h>
 #include <netinet/ip.h>
+#include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/if_ether.h>
-#include <netinet/ip6.h>
 #include <arpa/inet.h>
 #include <netinet/ether.h>
 
@@ -100,9 +100,7 @@ void get_opts(int argc, char * argv[]) {
                         opts.device = (arg) ? arg : "";
                         break;
                     case 'p':
-                        opts.filter += "port ";
-                        opts.filter += arg;
-                        opts.filter += " ";
+                        opts.add_filter("port " + static_cast<string>(arg));
                         break;
                     case 'n':
                         size_t i;
@@ -112,10 +110,10 @@ void get_opts(int argc, char * argv[]) {
                         break;
                 }
                 break;
-            case 't': opts.filter += "tcp ";   break;
-            case 'u': opts.filter += "udp ";   break;
-            case 'a': opts.filter += "arp ";   break;
-            case 'c': opts.filter += "icmp icmp6 ";   break;
+            case 't': opts.add_filter("tcp"); break;
+            case 'u': opts.add_filter("udp"); break;
+            case 'a': opts.add_filter("arp"); break;
+            case 'c': opts.add_filter("icmp or icmp6"); break;
 
             default:
                 error("Invalid CL argument");
@@ -152,46 +150,57 @@ void handle_packet(
     const u_char *packet
 ) {
     // get timestamp
-    auto timestamp = format_timestamp(&header->ts);
+    string timestamp = format_timestamp(&header->ts);
 
-    string protocol;
-    // int size = header->len;
-    //Get the IP Header part of this packet , excluding the ethernet header
-    struct iphdr *iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
-    switch (iph->protocol) //Check the Protocol and do accordingly...
-    {
-    	case 1:
-        case 128:
-    		protocol = "ICMP";
-    		break;
 
-    	case 6:
-            protocol = "TCP";
-    		break;
+    struct ether_header *eptr = (struct ether_header *) packet;
+    struct iphdr *iph = NULL;
+    struct ip6_hdr *ip6_h = NULL;
+    string src, dst, protocol;
+    char tmp[INET6_ADDRSTRLEN];
+    switch (ntohs(eptr->ether_type)) {
+        case ETHERTYPE_IP:
+            iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
+            src = get_addr_v4(iph->saddr);
+            dst = get_addr_v4(iph->daddr);
 
-    	case 17:
-    		protocol = "UDP";
-    		break;
+            switch (iph->protocol) {
+                case 1:
+                    protocol = "ICMP";
+                    break;
 
-    	default: // other protocols
-            struct ether_header *eptr = (struct ether_header *) packet;
-            if (ntohs (eptr->ether_type) == ETHERTYPE_ARP)
-                protocol = "ARP";
-            else protocol = "?????";   // TODO del
-    		break;
+                case 6:
+                    protocol = "TCP";
+                    break;
+
+                case 17:
+                    protocol = "UDP";
+                    break;
+
+                default:
+                    break;
+            }
+            break;
+
+        case ETHERTYPE_IPV6:
+            protocol = "ICMPv6";
+            ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
+            inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
+            src = tmp;
+            inet_ntop(AF_INET6, &ip6_h->ip6_dst, tmp, sizeof(tmp));
+            dst = tmp;
+            break;
+
+        case ETHERTYPE_ARP:
+            protocol = "ARP";
+            break;
+
+        default:
+            break;
     }
 
-    // u_int16_t handle_ethernet(
-    //     u_char *args,const struct pcap_pkthdr* pkthdr,const u_char *packet
-    // ){
-    //     struct ether_header *eptr = (struct ether_header *) packet;
-    //     fprintf(stdout,"ethernet header source: %s"
-    //             ,ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
-    //     fprintf(stdout," destination: %s "
-    //             ,ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
-    // }
-
-    cout << timestamp << " " << protocol << endl;
+    // print output
+    cout << timestamp << " " << src << " > " << dst << "\t\t" << protocol << endl;
 }
 
 
@@ -208,4 +217,15 @@ string format_timestamp(const timeval * timer) {
     timestamp.insert(length-2, ":");
 
     return timestamp;
+}
+
+
+std::string get_addr_v4(uint32_t in) {
+    string out;
+    for (int i=0; i<4; i++) {
+        out += to_string(in >> (i*8) & 0xFF);
+        out += ".";
+    }
+    out.back() = '\0';
+    return out;
 }

@@ -21,9 +21,10 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <netinet/arp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/if_ether.h>
-#include <arpa/inet.h>
+// #include <arpa/inet.h>
 #include <netinet/ether.h>
 
 using namespace std;
@@ -156,6 +157,7 @@ void handle_packet(
     struct ether_header *eptr = (struct ether_header *) packet;
     struct iphdr *iph = NULL;
     struct ip6_hdr *ip6_h = NULL;
+    struct arphdr *arph = NULL;
     string src, dst, protocol;
     char tmp[INET6_ADDRSTRLEN];
     switch (ntohs(eptr->ether_type)) {
@@ -193,6 +195,7 @@ void handle_packet(
 
         case ETHERTYPE_ARP:
             protocol = "ARP";
+
             break;
 
         default:

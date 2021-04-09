@@ -154,7 +154,7 @@ void handle_packet(
     // get timestamp
     auto timestamp = format_timestamp(&header->ts);
 
-    string prot;
+    string protocol;
     // int size = header->len;
     //Get the IP Header part of this packet , excluding the ethernet header
     struct iphdr *iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
@@ -162,22 +162,22 @@ void handle_packet(
     {
     	case 1:
         case 128:
-    		prot = "ICMP";
+    		protocol = "ICMP";
     		break;
 
     	case 6:
-            prot = "TCP";
+            protocol = "TCP";
     		break;
 
     	case 17:
-    		prot = "UDP";
+    		protocol = "UDP";
     		break;
 
     	default: // other protocols
             struct ether_header *eptr = (struct ether_header *) packet;
             if (ntohs (eptr->ether_type) == ETHERTYPE_ARP)
-                prot = "ARP";
-            else prot = "?????";   // TODO del
+                protocol = "ARP";
+            else protocol = "?????";   // TODO del
     		break;
     }
 
@@ -191,7 +191,7 @@ void handle_packet(
     //             ,ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
     // }
 
-    cout << timestamp << " " << prot << endl;
+    cout << timestamp << " " << protocol << endl;
 }
 
 

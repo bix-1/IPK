@@ -19,6 +19,8 @@ struct Opts {
 
 void get_opts(int argc, char *argv[]);
 
+void print_all_devs();
+
 void handle_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes);
 
 std::string format_timestamp(const timeval * timer);

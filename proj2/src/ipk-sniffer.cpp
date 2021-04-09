@@ -33,23 +33,8 @@ int main(int argc, char * argv[]) {
     // get CL options
     get_opts(argc, argv);
 
-    if (opts.device[0] == '\0') {
-        // get all devices
-        pcap_if_t * alldevs;
-        if (pcap_findalldevs(&alldevs, NULL) == PCAP_ERROR)
-            error("Failed to find devices");
-        // list add devices
-        int cnt = 0;
-        for (pcap_if_t * dev = alldevs; dev != NULL; dev = dev->next) {
-            cout << dev->name << endl;
-            cnt++;
-        }
-        // free list of devices
-        if (cnt == 0)
-            cout << "No devices found\n";
-        else
-            pcap_freealldevs(alldevs);
-    }
+    if (opts.device[0] == '\0')
+        print_all_devs();
     else {
         pcap_t * handle;
         struct bpf_program filter;
@@ -142,7 +127,30 @@ void get_opts(int argc, char * argv[]) {
 }
 
 
-void handle_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
+void print_all_devs() {
+    // get all devs
+    pcap_if_t * alldevs;
+    if (pcap_findalldevs(&alldevs, NULL) == PCAP_ERROR)
+        error("Failed to find devices");
+    // print names of devs
+    int cnt = 0;
+    for (pcap_if_t * dev = alldevs; dev != NULL; dev = dev->next) {
+        cout << dev->name << endl;
+        cnt++;
+    }
+    // free list of devs
+    if (cnt == 0)
+        cout << "No devices found\n";
+    else
+        pcap_freealldevs(alldevs);
+}
+
+
+void handle_packet(
+    u_char *args,
+    const struct pcap_pkthdr *header,
+    const u_char *packet
+) {
     // get timestamp
     auto timestamp = format_timestamp(&header->ts);
 

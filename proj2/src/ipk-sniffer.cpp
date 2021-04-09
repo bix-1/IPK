@@ -6,7 +6,7 @@
 
 /**
  * TODO
- * 
+ *
  */
 
 
@@ -15,15 +15,16 @@
 #include <string>
 #include <cstring>
 #include <getopt.h>
-#include <pcap.h>
 
+#include <pcap.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/if_ether.h>
 #include <netinet/ip6.h>
-
+#include <arpa/inet.h>
+#include <netinet/ether.h>
 
 using namespace std;
 
@@ -32,7 +33,7 @@ int main(int argc, char * argv[]) {
     // get CL options
     get_opts(argc, argv);
 
-    if (opts.interface[0] == '\0') {
+    if (opts.device[0] == '\0') {
         // get all devices
         pcap_if_t * alldevs;
         if (pcap_findalldevs(&alldevs, NULL) == PCAP_ERROR)
@@ -50,21 +51,27 @@ int main(int argc, char * argv[]) {
             pcap_freealldevs(alldevs);
     }
     else {
-        // get handle for reading
-        pcap_t * handle = pcap_create(opts.interface, NULL);
+        pcap_t * handle;
         struct bpf_program filter;
+        bpf_u_int32 mask, net;
+        char errbuf[PCAP_ERRBUF_SIZE];
 
-        if (handle == NULL) error("Failed to open handle");
-        pcap_set_promisc(handle, true);
-        if (pcap_activate(handle) != 0) {
-            pcap_close(handle);
-            error("Failed to activate handle");
+        // get netmask
+        if (pcap_lookupnet(opts.device, &net, &mask, errbuf) == -1) {
+            cerr << "Failed to get netmask for device\n";
+            net = 0; mask = 0;
         }
+        // open session in promiscuous mode
+        handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
+        if (handle == NULL) error("Failed to open device");
+        // set filter
+        if (pcap_compile(handle, &filter, opts.filter.c_str(), 1, 0) == -1)
+            error("Failed to compile filter");
+        if (pcap_setfilter(handle, &filter) == -1)
+            error("Failed to set filter");
+        // iterate given number of packets
+        pcap_loop(handle, opts.n, handle_packet, NULL);
 
-        cout << opts.filter.c_str() << endl;
-        pcap_compile(handle, &filter, opts.filter.c_str(), 1, 0);
-        pcap_setfilter(handle, &filter);
-        pcap_loop(handle, opts.n, process_packet, NULL);
         pcap_close(handle);
     }
 
@@ -82,7 +89,7 @@ void get_opts(int argc, char * argv[]) {
     opterr = 0; // disable getopt error call
     // define CL options
     static struct option long_options[] = {
-        {"interface", optional_argument, 0, 'i'},
+        {"device", optional_argument, 0, 'i'},
         {"tcp", no_argument, 0, 't'},
         {"udp", no_argument, 0, 'u'},
         {"arp", no_argument, 0, 'a'},
@@ -105,7 +112,7 @@ void get_opts(int argc, char * argv[]) {
                 // handle opts
                 switch (opt) {
                     case 'i':
-                        opts.interface = (arg) ? arg : "";
+                        opts.device = (arg) ? arg : "";
                         break;
                     case 'p':
                         opts.filter += "port ";
@@ -114,17 +121,16 @@ void get_opts(int argc, char * argv[]) {
                         break;
                     case 'n':
                         size_t i;
-                        if (!isdigit(arg[0])) error("Invalid port");
+                        if (!isdigit(arg[0]) && arg[0] != '-') error("Invalid num");
                         opts.n = stoi(arg, &i);
-                        if (i < strlen(arg)) error("Invalid port");
+                        if (i < strlen(arg)) error("Invalid num");
                         break;
                 }
                 break;
             case 't': opts.filter += "tcp ";   break;
             case 'u': opts.filter += "udp ";   break;
             case 'a': opts.filter += "arp ";   break;
-            case 'c': opts.filter += "icmp ";   break;
-
+            case 'c': opts.filter += "icmp icmp6 ";   break;
 
             default:
                 error("Invalid CL argument");
@@ -132,37 +138,66 @@ void get_opts(int argc, char * argv[]) {
     }
     // validation
     if (optind < argc) error("Invalid arguments");
-    if (!opts.interface) error("Missing --interface option");
+    if (!opts.device) error("Missing --interface option");
 }
 
 
-int icmp = 0, igmp = 0, tcp = 0, udp = 0, others = 0, total = 0;
-void process_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes) {
-    total++;
-    int size = header->len;
-	//Get the IP Header part of this packet , excluding the ethernet header
-	struct iphdr *iph = (struct iphdr*)(bytes + sizeof(struct ethhdr));
-	switch (iph->protocol) //Check the Protocol and do accordingly...
-	{
-		case 1:  //ICMP Protocol
-			++icmp;
-			break;
+void handle_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
+    // get timestamp
+    auto timestamp = format_timestamp(&header->ts);
 
-		case 2:  //IGMP Protocol
-			++igmp;
-			break;
+    string prot;
+    // int size = header->len;
+    //Get the IP Header part of this packet , excluding the ethernet header
+    struct iphdr *iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
+    switch (iph->protocol) //Check the Protocol and do accordingly...
+    {
+    	case 1:
+        case 128:
+    		prot = "ICMP";
+    		break;
 
-		case 6:  //TCP Protocol
-			++tcp;
-			break;
+    	case 6:
+            prot = "TCP";
+    		break;
 
-		case 17: //UDP Protocol
-			++udp;
-			break;
+    	case 17:
+    		prot = "UDP";
+    		break;
 
-		default: //Some Other Protocol like ARP etc.
-			++others;
-			break;
-	}
-	printf("TCP : %d   UDP : %d   ICMP : %d   IGMP : %d   Others : %d   Total : %d\n", tcp , udp , icmp , igmp , others , total);
+    	default: // other protocols
+            struct ether_header *eptr = (struct ether_header *) packet;
+            if (ntohs (eptr->ether_type) == ETHERTYPE_ARP)
+                prot = "ARP";
+            else prot = "?????";   // TODO del
+    		break;
+    }
+
+    // u_int16_t handle_ethernet(
+    //     u_char *args,const struct pcap_pkthdr* pkthdr,const u_char *packet
+    // ){
+    //     struct ether_header *eptr = (struct ether_header *) packet;
+    //     fprintf(stdout,"ethernet header source: %s"
+    //             ,ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
+    //     fprintf(stdout," destination: %s "
+    //             ,ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
+    // }
+
+    cout << timestamp << " " << prot << endl;
+}
+
+
+string format_timestamp(const timeval * timer) {
+    char timebuf[100];
+    // get local time from packet timestamp
+    struct tm *timeptr = localtime(&timer->tv_sec);
+    // format time as string:   YYYY-MM-DD\THH:MM:SS+offset
+    //      %F == YYYY-MM-DD, %T == HH:MM:SS, %z == offset
+    size_t length = strftime(timebuf, sizeof(timebuf)-1, "%FT%T%z", timeptr);
+    // add ":" to separate offset HH & MM
+    if (length < 2) return timebuf;
+    string timestamp = timebuf;
+    timestamp.insert(length-2, ":");
+
+    return timestamp;
 }

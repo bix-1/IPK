@@ -12,13 +12,15 @@
 void error(const char * msg);
 
 struct Opts {
-    const char * interface = NULL;
+    const char * device = NULL;
     std::string filter = "";
     int n = 1;
 } opts;
 
 void get_opts(int argc, char *argv[]);
 
-void process_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes);
+void handle_packet(u_char *user, const struct pcap_pkthdr *header, const u_char *bytes);
+
+std::string format_timestamp(const timeval * timer);
 
 #endif

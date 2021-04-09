@@ -9,6 +9,13 @@
  *
  */
 
+/**
+ * NOTE
+ * https://www.codeproject.com/Questions/463912/Identify-ARP-and-Broadcast-Packets-with-packet-sni
+ * LICENSE: https://www.codeproject.com/info/cpol10.aspx
+ * ^arph->arp_sha conversion
+ */
+
 
 #include "ipk-sniffer.h"
 #include <iostream>
@@ -21,10 +28,8 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-#include <netinet/arp.h>
 #include <netinet/ip_icmp.h>
 #include <netinet/if_ether.h>
-// #include <arpa/inet.h>
 #include <netinet/ether.h>
 
 using namespace std;
@@ -157,7 +162,7 @@ void handle_packet(
     struct ether_header *eptr = (struct ether_header *) packet;
     struct iphdr *iph = NULL;
     struct ip6_hdr *ip6_h = NULL;
-    struct arphdr *arph = NULL;
+    struct ether_arp *arph = NULL;
     string src, dst, protocol;
     char tmp[INET6_ADDRSTRLEN];
     switch (ntohs(eptr->ether_type)) {
@@ -195,7 +200,30 @@ void handle_packet(
 
         case ETHERTYPE_ARP:
             protocol = "ARP";
-
+            arph = (struct ether_arp*)(packet + sizeof(struct ethhdr));
+            char buf[100];
+            snprintf(
+                buf, sizeof(buf),
+                "%02x:%02x:%02x:%02x:%02x:%02x",
+                arph->arp_sha[0],
+                arph->arp_sha[1],
+                arph->arp_sha[2],
+                arph->arp_sha[3],
+                arph->arp_sha[4],
+                arph->arp_sha[5]
+            );
+            src = buf;
+            snprintf(
+                buf, sizeof(buf),
+                "%02x:%02x:%02x:%02x:%02x:%02x",
+                arph->arp_tha[0],
+                arph->arp_tha[1],
+                arph->arp_tha[2],
+                arph->arp_tha[3],
+                arph->arp_tha[4],
+                arph->arp_tha[5]
+            );
+            dst = buf;
             break;
 
         default:

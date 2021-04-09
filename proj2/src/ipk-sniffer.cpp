@@ -205,23 +205,23 @@ void handle_packet(
             snprintf(
                 buf, sizeof(buf),
                 "%02x:%02x:%02x:%02x:%02x:%02x",
-                arph->arp_sha[0],
-                arph->arp_sha[1],
-                arph->arp_sha[2],
-                arph->arp_sha[3],
-                arph->arp_sha[4],
-                arph->arp_sha[5]
+                eptr->ether_shost[0],
+                eptr->ether_shost[1],
+                eptr->ether_shost[2],
+                eptr->ether_shost[3],
+                eptr->ether_shost[4],
+                eptr->ether_shost[5]
             );
             src = buf;
             snprintf(
                 buf, sizeof(buf),
                 "%02x:%02x:%02x:%02x:%02x:%02x",
-                arph->arp_tha[0],
-                arph->arp_tha[1],
-                arph->arp_tha[2],
-                arph->arp_tha[3],
-                arph->arp_tha[4],
-                arph->arp_tha[5]
+                eptr->ether_dhost[0],
+                eptr->ether_dhost[1],
+                eptr->ether_dhost[2],
+                eptr->ether_dhost[3],
+                eptr->ether_dhost[4],
+                eptr->ether_dhost[5]
             );
             dst = buf;
             break;

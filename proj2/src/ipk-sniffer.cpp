@@ -43,33 +43,8 @@ int main(int argc, char * argv[]) {
 
     if (opts.device[0] == '\0')
         print_all_devs();
-    else {
-        pcap_t * handle;
-        struct bpf_program filter;
-        bpf_u_int32 mask, net;
-        char errbuf[PCAP_ERRBUF_SIZE];
-
-        // get netmask
-        if (pcap_lookupnet(opts.device, &net, &mask, errbuf) == -1) {
-            cerr << "Failed to get netmask for device\n";
-            net = 0; mask = 0;
-        }
-        // open session in promiscuous mode
-        handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
-        if (handle == NULL) error("Failed to open device");
-
-        // set filter
-        const string f_str = opts.get_filter();
-        if (pcap_compile(handle, &filter, f_str.c_str(), 1, 0) == -1)
-            error("Failed to compile filter");
-        if (pcap_setfilter(handle, &filter) == -1)
-            error("Failed to set filter");
-
-        // iterate given number of packets
-        pcap_loop(handle, opts.n, handle_packet, NULL);
-
-        pcap_close(handle);
-    }
+    else
+        sniff_packets();
 
     return 0;
 }
@@ -121,9 +96,9 @@ void get_opts(int argc, char * argv[]) {
                         break;
                 }
                 break;
-            case 't': opts.tcp = true;  break;
-            case 'u': opts.udp = true;  break;
-            case 'a': opts.arp = true;  break;
+            case 't': opts.tcp  = true; break;
+            case 'u': opts.udp  = true; break;
+            case 'a': opts.arp  = true; break;
             case 'c': opts.icmp = true; break;
 
             default:
@@ -133,25 +108,6 @@ void get_opts(int argc, char * argv[]) {
     // validation
     if (optind < argc) error("Invalid arguments");
     if (!opts.device) error("Missing --interface option");
-}
-
-
-const string Opts::get_filter() {
-    string filter = "(";
-    if (opts.tcp || opts.udp || opts.arp || opts.icmp) {
-        if (opts.tcp)   filter += "tcp or ";
-        if (opts.udp)   filter += "udp or ";
-        if (opts.arp)   filter += "arp or ";
-        if (opts.icmp)  filter += "icmp or icmpv6 or ";
-        filter = filter.substr(0, filter.length()-4);
-        filter += ')';
-    }
-    if (!empty(opts.port)) {
-        if (!filter.empty()) filter += " and ";
-        filter += "port " + opts.port;
-    }
-
-    return filter;
 }
 
 
@@ -174,15 +130,60 @@ void print_all_devs() {
 }
 
 
+void sniff_packets() {
+    pcap_t * handle;
+    struct bpf_program filter;
+    bpf_u_int32 mask, net;
+    char errbuf[PCAP_ERRBUF_SIZE];
+
+    // get netmask
+    if (pcap_lookupnet(opts.device, &net, &mask, errbuf) == -1) {
+        cerr << "Failed to get netmask for device\n";
+        net = 0; mask = 0;
+    }
+    // open session in promiscuous mode
+    handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
+    if (handle == NULL) error("Failed to open device");
+
+    // set filter
+    const string f_str = opts.get_filter();
+    if (pcap_compile(handle, &filter, f_str.c_str(), 1, 0) == -1)
+        error("Failed to compile filter");
+    if (pcap_setfilter(handle, &filter) == -1)
+        error("Failed to set filter");
+
+    // iterate given number of packets
+    pcap_loop(handle, opts.n, handle_packet, NULL);
+
+    pcap_close(handle);
+}
+
+
+const string Opts::get_filter() {
+    string filter;
+    if (opts.tcp || opts.udp || opts.arp || opts.icmp) {
+        filter = "(";
+        if (opts.tcp)   filter += "tcp or ";
+        if (opts.udp)   filter += "udp or ";
+        if (opts.arp)   filter += "arp or ";
+        if (opts.icmp)  filter += "icmp or icmpv6 or ";
+        filter = filter.substr(0, filter.length()-4);
+        filter += ')';
+    }
+    if (!empty(opts.port)) {
+        if (!filter.empty()) filter += " and ";
+        filter += "port " + opts.port;
+    }
+
+    return filter;
+}
+
+
 void handle_packet(
     u_char *args,
     const struct pcap_pkthdr *header,
     const u_char *packet
 ) {
-    // get timestamp & packet length
-    string timestamp = format_timestamp(&header->ts);
-    uint32_t length = header->len;
-
     // headers
     struct ether_header *eptr = (struct ether_header *) packet;
     struct iphdr *iph = NULL;
@@ -190,11 +191,16 @@ void handle_packet(
     struct ether_arp *arph = NULL;
     struct tcphdr *tcph = NULL;
     struct udphdr *udph = NULL;
-
+    // output buffers
     string saddr, daddr, sport, dport;
-    string protocol; // TODO del
     char tmp[INET6_ADDRSTRLEN];
+    string protocol; // TODO del
 
+    // get timestamp & packet length
+    string timestamp = format_timestamp(&header->ts);
+    uint32_t length = header->len;
+
+    // get packet info according to its protocol
     switch (ntohs(eptr->ether_type)) {
         case ETHERTYPE_IP:
             iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
@@ -263,9 +269,9 @@ void handle_packet(
             break;
     }
 
-    // print output
     cout << protocol << " "; // TODO del
 
+    // print output
     cout << timestamp << " ";
     cout << saddr << " : " << sport << " > ";
     cout << daddr << " : " << dport;

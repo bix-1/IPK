@@ -56,7 +56,8 @@ int main(int argc, char * argv[]) {
         handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
         if (handle == NULL) error("Failed to open device");
         // set filter
-        if (pcap_compile(handle, &filter, opts.filter.c_str(), 1, 0) == -1)
+        const char * f_str = opts.get_filter();
+        if (pcap_compile(handle, &filter, f_str, 1, 0) == -1)
             error("Failed to compile filter");
         if (pcap_setfilter(handle, &filter) == -1)
             error("Failed to set filter");
@@ -106,7 +107,7 @@ void get_opts(int argc, char * argv[]) {
                         opts.device = (arg) ? arg : "";
                         break;
                     case 'p':
-                        opts.add_filter("port " + static_cast<string>(arg));
+                        opts.port = static_cast<string>(arg);
                         break;
                     case 'n':
                         size_t i;
@@ -116,10 +117,10 @@ void get_opts(int argc, char * argv[]) {
                         break;
                 }
                 break;
-            case 't': opts.add_filter("tcp"); break;
-            case 'u': opts.add_filter("udp"); break;
-            case 'a': opts.add_filter("arp"); break;
-            case 'c': opts.add_filter("icmp or icmp6"); break;
+            case 't': opts.tcp = true;  break;
+            case 'u': opts.udp = true;  break;
+            case 'a': opts.arp = true;  break;
+            case 'c': opts.icmp = true; break;
 
             default:
                 error("Invalid CL argument");
@@ -128,6 +129,20 @@ void get_opts(int argc, char * argv[]) {
     // validation
     if (optind < argc) error("Invalid arguments");
     if (!opts.device) error("Missing --interface option");
+}
+
+
+const char * Opts::get_filter() {
+    string filter = "(";
+    if (opts.tcp)   filter += "tcp or ";
+    if (opts.udp)   filter += "udp or ";
+    if (opts.arp)   filter += "arp or ";
+    if (opts.icmp)  filter += "icmp or icmpv6 or ";
+    filter = filter.substr(0, filter.length()-4);
+    filter += ')';
+    if (!empty(opts.port))  filter += " and port " + opts.port;
+
+    return filter.c_str();
 }
 
 
@@ -157,7 +172,6 @@ void handle_packet(
 ) {
     // get timestamp
     string timestamp = format_timestamp(&header->ts);
-
 
     struct ether_header *eptr = (struct ether_header *) packet;
     struct iphdr *iph = NULL;

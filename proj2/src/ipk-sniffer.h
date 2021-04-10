@@ -15,11 +15,14 @@ class Opts {
     public:
         const char * device = NULL;
         std::string filter = "";
+        std::string port = "";
         int n = 1;
+        bool tcp = false;
+        bool udp = false;
+        bool arp = false;
+        bool icmp = false;
 
-        void add_filter(std::string f) {
-            filter += (empty(filter)) ? f : " or "+f;
-        }
+        const char * get_filter();
 } opts;
 
 void get_opts(int argc, char *argv[]);

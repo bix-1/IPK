@@ -4,35 +4,30 @@
  * @author Jakub Bartko <xbartk07@stud.fit.vutbr.cz>
  */
 
-/**
- * NOTE
+/**NOTE
  * https://www.codeproject.com/Questions/463912/Identify-ARP-and-Broadcast-Packets-with-packet-sni
  * LICENSE: https://www.codeproject.com/info/cpol10.aspx
  * ^arph->arp_sha conversion
  */
 
-
 #include "ipk-sniffer.h"
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <getopt.h>
-
-#include <pcap.h>
+#include <iostream>         // I/O
+#include <string>           // string
+#include <cstring>          // strlen
+#include <getopt.h>         // CL options
+// PACKETS & PROTOCOLS
+#include <pcap.h>           // catching & filtering
+#include <netinet/if_ether.h>
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
-#include <netinet/ip_icmp.h>
-#include <netinet/if_ether.h>
-#include <netinet/ether.h>
 
 using namespace std;
 
 
 int main(int argc, char * argv[]) {
-    // get CL options
-    get_opts(argc, argv);
+    opts.get_opts(argc, argv);  // CL options
 
     if (opts.device[0] == '\0')
         print_all_devs();
@@ -49,9 +44,9 @@ void error(const char * msg) {
 }
 
 
-void get_opts(int argc, char * argv[]) {
+void Options::get_opts(int argc, char * argv[]) {
     opterr = 0; // disable getopt error call
-    // define CL options
+    // define valid CL options
     static struct option long_options[] = {
         {"device", optional_argument, 0, 'i'},
         {"tcp", no_argument, 0, 't'},
@@ -89,6 +84,8 @@ void get_opts(int argc, char * argv[]) {
                         break;
                 }
                 break;
+
+            // opts without argument
             case 't': opts.tcp  = true; break;
             case 'u': opts.udp  = true; break;
             case 'a': opts.arp  = true; break;
@@ -101,6 +98,28 @@ void get_opts(int argc, char * argv[]) {
     // validation
     if (optind < argc) error("Invalid arguments");
     if (!opts.device) error("Missing --interface option");
+}
+
+
+const string Options::get_filter() {
+    string filter;
+    // protocols
+    if (opts.tcp || opts.udp || opts.arp || opts.icmp) {
+        filter = "(";
+        if (opts.tcp)   filter += "tcp or ";
+        if (opts.udp)   filter += "udp or ";
+        if (opts.arp)   filter += "arp or ";
+        if (opts.icmp)  filter += "icmp or icmp6 or ";
+        filter = filter.substr(0, filter.length()-4);
+        filter += ')';
+    }
+    // port
+    if (!empty(opts.port)) {
+        if (!filter.empty()) filter += " and ";
+        filter += "port " + opts.port;
+    }
+
+    return filter;
 }
 
 
@@ -138,7 +157,7 @@ void sniff_packets() {
     handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
     if (handle == NULL) error("Failed to open device");
 
-    // set filter
+    // compile & set filter
     const string f_str = opts.get_filter();
     if (pcap_compile(handle, &filter, f_str.c_str(), 1, 0) == -1)
         error("Failed to compile filter");
@@ -152,32 +171,12 @@ void sniff_packets() {
 }
 
 
-const string Opts::get_filter() {
-    string filter;
-    if (opts.tcp || opts.udp || opts.arp || opts.icmp) {
-        filter = "(";
-        if (opts.tcp)   filter += "tcp or ";
-        if (opts.udp)   filter += "udp or ";
-        if (opts.arp)   filter += "arp or ";
-        if (opts.icmp)  filter += "icmp or icmp6 or ";
-        filter = filter.substr(0, filter.length()-4);
-        filter += ')';
-    }
-    if (!empty(opts.port)) {
-        if (!filter.empty()) filter += " and ";
-        filter += "port " + opts.port;
-    }
-
-    return filter;
-}
-
-
 void handle_packet(
     u_char *args,
     const struct pcap_pkthdr *header,
     const u_char *packet
 ) {
-    (void)args;
+    (void)args; // won't be used
     struct ether_header *eptr = (struct ether_header *) packet;
     // output buffers
     string saddr, daddr, sport, dport;
@@ -186,19 +185,16 @@ void handle_packet(
     string timestamp = format_timestamp(&header->ts);
     int length = header->len;
 
-    // get packet info according to its protocol
+    // get packet's info according to its protocol
     switch (ntohs(eptr->ether_type)) {
         case ETHERTYPE_IP: {
+            // get IP
             struct iphdr *iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
             saddr = get_addr_v4(iph->saddr);
             daddr = get_addr_v4(iph->daddr);
 
+            // get ports
             switch (iph->protocol) {
-                case 1: {   // ICMPv4
-                    struct icmphdr *icmph = (struct icmphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
-                    (void)icmph; // TODO
-                    break;
-                }
                 case 6: {   // TCP
                     struct tcphdr *tcph = (struct tcphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     sport = to_string(ntohs(tcph->th_sport));
@@ -217,6 +213,7 @@ void handle_packet(
             break;
         }
         case ETHERTYPE_IPV6: {
+            // get address
             struct ip6_hdr *ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
             char tmp[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
@@ -226,7 +223,7 @@ void handle_packet(
             break;
         }
         case ETHERTYPE_ARP: {
-            struct ether_arp *arph = (struct ether_arp*)(packet + sizeof(struct ethhdr));
+            // get address
             char buf[100];
             snprintf(
                 buf, sizeof(buf),
@@ -250,23 +247,20 @@ void handle_packet(
                 eptr->ether_dhost[5]
             );
             daddr = buf;
-
-            (void)arph; // TODO
             break;
         }
         default:
             break;
     }
 
+    // correct port strings for output
     if (!sport.empty()) sport.insert(0, " : ");
     if (!dport.empty()) dport.insert(0, " : ");
 
-    // print output
-    cout << timestamp << " ";
-    cout << saddr << sport << " > ";
-    cout << daddr << dport;
+    // print header of output
+    cout << timestamp << " " << saddr << sport << " > " << daddr << dport;
     cout << ", length " << length << " bytes\n";
-
+    // print packet's data
     print_data(packet, length);
 }
 
@@ -275,13 +269,17 @@ void print_data(const u_char *data, const int size) {
     int offset = 0, i;
     char buff[17];
     u_char c;
+    // iterate byte by byte
     while (offset < size) {
+        // print offset
         printf("0x%04x:", offset);
+        // print bytes in HEX
         for (i = 0; (i < 16) && (i+offset < size); i++) {
             c = data[offset+i];
             printf(" %02x", c);
             buff[i] = (isprint(c)) ? c : '.';
         }
+        // print bytes in ASCII
         buff[i] = '\0';
         cout << "  " << buff << endl;
         offset += 16;

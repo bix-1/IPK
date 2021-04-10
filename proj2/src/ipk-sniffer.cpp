@@ -5,13 +5,6 @@
  */
 
 /**
- * TODO
- *
- *
- *  detele string protocol
- */
-
-/**
  * NOTE
  * https://www.codeproject.com/Questions/463912/Identify-ARP-and-Broadcast-Packets-with-packet-sni
  * LICENSE: https://www.codeproject.com/info/cpol10.aspx
@@ -188,11 +181,10 @@ void handle_packet(
     struct ether_header *eptr = (struct ether_header *) packet;
     // output buffers
     string saddr, daddr, sport, dport;
-    string protocol; // TODO del
 
     // get timestamp & packet length
     string timestamp = format_timestamp(&header->ts);
-    uint32_t length = header->len;
+    int length = header->len;
 
     // get packet info according to its protocol
     switch (ntohs(eptr->ether_type)) {
@@ -203,20 +195,17 @@ void handle_packet(
 
             switch (iph->protocol) {
                 case 1: {   // ICMPv4
-                    protocol = "ICMP";
                     struct icmphdr *icmph = (struct icmphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     (void)icmph; // TODO
                     break;
                 }
                 case 6: {   // TCP
-                    protocol = "TCP";
                     struct tcphdr *tcph = (struct tcphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     sport = to_string(ntohs(tcph->th_sport));
                     dport = to_string(ntohs(tcph->th_dport));
                     break;
                 }
                 case 17: {  // UDP
-                    protocol = "UDP";
                     struct udphdr *udph = (struct udphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     sport = to_string(ntohs(udph->uh_sport));
                     dport = to_string(ntohs(udph->uh_dport));
@@ -228,7 +217,6 @@ void handle_packet(
             break;
         }
         case ETHERTYPE_IPV6: {
-            protocol = "ICMPv6";
             struct ip6_hdr *ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
             char tmp[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
@@ -238,7 +226,6 @@ void handle_packet(
             break;
         }
         case ETHERTYPE_ARP: {
-            protocol = "ARP";
             struct ether_arp *arph = (struct ether_arp*)(packet + sizeof(struct ethhdr));
             char buf[100];
             snprintf(
@@ -274,13 +261,32 @@ void handle_packet(
     if (!sport.empty()) sport.insert(0, " : ");
     if (!dport.empty()) dport.insert(0, " : ");
 
-    cout << protocol << " "; // TODO del
-
     // print output
     cout << timestamp << " ";
     cout << saddr << sport << " > ";
     cout << daddr << dport;
     cout << ", length " << length << " bytes\n";
+
+    print_data(packet, length);
+}
+
+
+void print_data(const u_char *data, const int size) {
+    int offset = 0, i;
+    char buff[17];
+    u_char c;
+    while (offset < size) {
+        printf("0x%04x:", offset);
+        for (i = 0; (i < 16) && (i+offset < size); i++) {
+            c = data[offset+i];
+            printf(" %02x", c);
+            buff[i] = (isprint(c)) ? c : '.';
+        }
+        buff[i] = '\0';
+        cout << "  " << buff << endl;
+        offset += 16;
+    }
+    cout << endl;
 }
 
 
@@ -308,7 +314,7 @@ string format_timestamp(const timeval * timer) {
 }
 
 
-std::string get_addr_v4(uint32_t in) {
+string get_addr_v4(uint32_t in) {
     string out;
     for (int i=0; i<4; i++) {
         out += to_string(in >> (i*8) & 0xFF);

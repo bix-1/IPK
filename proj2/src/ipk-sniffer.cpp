@@ -166,7 +166,7 @@ const string Opts::get_filter() {
         if (opts.tcp)   filter += "tcp or ";
         if (opts.udp)   filter += "udp or ";
         if (opts.arp)   filter += "arp or ";
-        if (opts.icmp)  filter += "icmp or icmpv6 or ";
+        if (opts.icmp)  filter += "icmp or icmp6 or ";
         filter = filter.substr(0, filter.length()-4);
         filter += ')';
     }
@@ -188,7 +188,6 @@ void handle_packet(
     struct ether_header *eptr = (struct ether_header *) packet;
     // output buffers
     string saddr, daddr, sport, dport;
-    char tmp[INET6_ADDRSTRLEN];
     string protocol; // TODO del
 
     // get timestamp & packet length
@@ -203,18 +202,20 @@ void handle_packet(
             daddr = get_addr_v4(iph->daddr);
 
             switch (iph->protocol) {
-                case 1:
+                case 1: {   // ICMPv4
                     protocol = "ICMP";
+                    struct icmphdr *icmph = (struct icmphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
+                    (void)icmph; // TODO
                     break;
-
-                case 6: {
+                }
+                case 6: {   // TCP
                     protocol = "TCP";
                     struct tcphdr *tcph = (struct tcphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     sport = to_string(ntohs(tcph->th_sport));
                     dport = to_string(ntohs(tcph->th_dport));
                     break;
                 }
-                case 17: {
+                case 17: {  // UDP
                     protocol = "UDP";
                     struct udphdr *udph = (struct udphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     sport = to_string(ntohs(udph->uh_sport));
@@ -229,6 +230,7 @@ void handle_packet(
         case ETHERTYPE_IPV6: {
             protocol = "ICMPv6";
             struct ip6_hdr *ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
+            char tmp[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
             saddr = tmp;
             inet_ntop(AF_INET6, &ip6_h->ip6_dst, tmp, sizeof(tmp));
@@ -261,18 +263,23 @@ void handle_packet(
                 eptr->ether_dhost[5]
             );
             daddr = buf;
+
+            (void)arph; // TODO
             break;
         }
         default:
             break;
     }
 
+    if (!sport.empty()) sport.insert(0, " : ");
+    if (!dport.empty()) dport.insert(0, " : ");
+
     cout << protocol << " "; // TODO del
 
     // print output
     cout << timestamp << " ";
-    cout << saddr << " : " << sport << " > ";
-    cout << daddr << " : " << dport;
+    cout << saddr << sport << " > ";
+    cout << daddr << dport;
     cout << ", length " << length << " bytes\n";
 }
 

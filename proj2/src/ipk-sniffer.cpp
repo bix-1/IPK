@@ -184,13 +184,8 @@ void handle_packet(
     const struct pcap_pkthdr *header,
     const u_char *packet
 ) {
-    // headers
+    (void)args;
     struct ether_header *eptr = (struct ether_header *) packet;
-    struct iphdr *iph = NULL;
-    struct ip6_hdr *ip6_h = NULL;
-    struct ether_arp *arph = NULL;
-    struct tcphdr *tcph = NULL;
-    struct udphdr *udph = NULL;
     // output buffers
     string saddr, daddr, sport, dport;
     char tmp[INET6_ADDRSTRLEN];
@@ -202,8 +197,8 @@ void handle_packet(
 
     // get packet info according to its protocol
     switch (ntohs(eptr->ether_type)) {
-        case ETHERTYPE_IP:
-            iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
+        case ETHERTYPE_IP: {
+            struct iphdr *iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
             saddr = get_addr_v4(iph->saddr);
             daddr = get_addr_v4(iph->daddr);
 
@@ -212,34 +207,37 @@ void handle_packet(
                     protocol = "ICMP";
                     break;
 
-                case 6:
+                case 6: {
                     protocol = "TCP";
-                    tcph = (struct tcphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
+                    struct tcphdr *tcph = (struct tcphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
                     sport = to_string(ntohs(tcph->th_sport));
                     dport = to_string(ntohs(tcph->th_dport));
                     break;
-
-                case 17:
+                }
+                case 17: {
                     protocol = "UDP";
+                    struct udphdr *udph = (struct udphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
+                    sport = to_string(ntohs(udph->uh_sport));
+                    dport = to_string(ntohs(udph->uh_dport));
                     break;
-
+                }
                 default:
                     break;
             }
             break;
-
-        case ETHERTYPE_IPV6:
+        }
+        case ETHERTYPE_IPV6: {
             protocol = "ICMPv6";
-            ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
+            struct ip6_hdr *ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
             inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
             saddr = tmp;
             inet_ntop(AF_INET6, &ip6_h->ip6_dst, tmp, sizeof(tmp));
             daddr = tmp;
             break;
-
-        case ETHERTYPE_ARP:
+        }
+        case ETHERTYPE_ARP: {
             protocol = "ARP";
-            arph = (struct ether_arp*)(packet + sizeof(struct ethhdr));
+            struct ether_arp *arph = (struct ether_arp*)(packet + sizeof(struct ethhdr));
             char buf[100];
             snprintf(
                 buf, sizeof(buf),
@@ -264,7 +262,7 @@ void handle_packet(
             );
             daddr = buf;
             break;
-
+        }
         default:
             break;
     }

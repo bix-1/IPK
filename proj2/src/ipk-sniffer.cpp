@@ -7,6 +7,8 @@
 /**
  * TODO
  *
+ *
+ *  detele string protocol
  */
 
 /**
@@ -55,12 +57,14 @@ int main(int argc, char * argv[]) {
         // open session in promiscuous mode
         handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
         if (handle == NULL) error("Failed to open device");
+
         // set filter
-        const char * f_str = opts.get_filter();
-        if (pcap_compile(handle, &filter, f_str, 1, 0) == -1)
+        const string f_str = opts.get_filter();
+        if (pcap_compile(handle, &filter, f_str.c_str(), 1, 0) == -1)
             error("Failed to compile filter");
         if (pcap_setfilter(handle, &filter) == -1)
             error("Failed to set filter");
+
         // iterate given number of packets
         pcap_loop(handle, opts.n, handle_packet, NULL);
 
@@ -132,17 +136,22 @@ void get_opts(int argc, char * argv[]) {
 }
 
 
-const char * Opts::get_filter() {
+const string Opts::get_filter() {
     string filter = "(";
-    if (opts.tcp)   filter += "tcp or ";
-    if (opts.udp)   filter += "udp or ";
-    if (opts.arp)   filter += "arp or ";
-    if (opts.icmp)  filter += "icmp or icmpv6 or ";
-    filter = filter.substr(0, filter.length()-4);
-    filter += ')';
-    if (!empty(opts.port))  filter += " and port " + opts.port;
+    if (opts.tcp || opts.udp || opts.arp || opts.icmp) {
+        if (opts.tcp)   filter += "tcp or ";
+        if (opts.udp)   filter += "udp or ";
+        if (opts.arp)   filter += "arp or ";
+        if (opts.icmp)  filter += "icmp or icmpv6 or ";
+        filter = filter.substr(0, filter.length()-4);
+        filter += ')';
+    }
+    if (!empty(opts.port)) {
+        if (!filter.empty()) filter += " and ";
+        filter += "port " + opts.port;
+    }
 
-    return filter.c_str();
+    return filter;
 }
 
 
@@ -159,7 +168,7 @@ void print_all_devs() {
     }
     // free list of devs
     if (cnt == 0)
-        cout << "No devices found\n";
+        cerr << "No devices found\n";
     else
         pcap_freealldevs(alldevs);
 }
@@ -170,20 +179,27 @@ void handle_packet(
     const struct pcap_pkthdr *header,
     const u_char *packet
 ) {
-    // get timestamp
+    // get timestamp & packet length
     string timestamp = format_timestamp(&header->ts);
+    uint32_t length = header->len;
 
+    // headers
     struct ether_header *eptr = (struct ether_header *) packet;
     struct iphdr *iph = NULL;
     struct ip6_hdr *ip6_h = NULL;
     struct ether_arp *arph = NULL;
-    string src, dst, protocol;
+    struct tcphdr *tcph = NULL;
+    struct udphdr *udph = NULL;
+
+    string saddr, daddr, sport, dport;
+    string protocol; // TODO del
     char tmp[INET6_ADDRSTRLEN];
+
     switch (ntohs(eptr->ether_type)) {
         case ETHERTYPE_IP:
             iph = (struct iphdr*)(packet + sizeof(struct ethhdr));
-            src = get_addr_v4(iph->saddr);
-            dst = get_addr_v4(iph->daddr);
+            saddr = get_addr_v4(iph->saddr);
+            daddr = get_addr_v4(iph->daddr);
 
             switch (iph->protocol) {
                 case 1:
@@ -192,6 +208,9 @@ void handle_packet(
 
                 case 6:
                     protocol = "TCP";
+                    tcph = (struct tcphdr *)(packet + sizeof(struct ethhdr) + sizeof(struct ip));
+                    sport = to_string(ntohs(tcph->th_sport));
+                    dport = to_string(ntohs(tcph->th_dport));
                     break;
 
                 case 17:
@@ -207,9 +226,9 @@ void handle_packet(
             protocol = "ICMPv6";
             ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
             inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
-            src = tmp;
+            saddr = tmp;
             inet_ntop(AF_INET6, &ip6_h->ip6_dst, tmp, sizeof(tmp));
-            dst = tmp;
+            daddr = tmp;
             break;
 
         case ETHERTYPE_ARP:
@@ -226,7 +245,7 @@ void handle_packet(
                 eptr->ether_shost[4],
                 eptr->ether_shost[5]
             );
-            src = buf;
+            saddr = buf;
             snprintf(
                 buf, sizeof(buf),
                 "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -237,7 +256,7 @@ void handle_packet(
                 eptr->ether_dhost[4],
                 eptr->ether_dhost[5]
             );
-            dst = buf;
+            daddr = buf;
             break;
 
         default:
@@ -245,21 +264,34 @@ void handle_packet(
     }
 
     // print output
-    cout << timestamp << " " << src << " > " << dst << "\t\t" << protocol << endl;
+    cout << protocol << " "; // TODO del
+
+    cout << timestamp << " ";
+    cout << saddr << " : " << sport << " > ";
+    cout << daddr << " : " << dport;
+    cout << ", length " << length << " bytes\n";
 }
 
 
 string format_timestamp(const timeval * timer) {
-    char timebuf[100];
+    // format time as string:   YYYY-MM-DD\THH:MM:SS+offset
+    string timestamp;
+    char buf[50];
+
     // get local time from packet timestamp
     struct tm *timeptr = localtime(&timer->tv_sec);
-    // format time as string:   YYYY-MM-DD\THH:MM:SS+offset
-    //      %F == YYYY-MM-DD, %T == HH:MM:SS, %z == offset
-    size_t length = strftime(timebuf, sizeof(timebuf)-1, "%FT%T%z", timeptr);
-    // add ":" to separate offset HH & MM
-    if (length < 2) return timebuf;
-    string timestamp = timebuf;
-    timestamp.insert(length-2, ":");
+    // get date & time
+    strftime(buf, sizeof(buf)-1, "%FT%T", timeptr);
+    timestamp = buf;
+
+    // append decimal part of seconds
+    timestamp += '.' + to_string(timer->tv_usec).substr(0, 3);
+
+    // append timezone offset as +HH:MM
+    size_t len = strftime(buf, sizeof(buf)-1, "%z", timeptr);
+    if (len < 2) return timestamp;   // tz might be unavailable
+    timestamp += buf;
+    timestamp.insert(timestamp.length()-2, ":");
 
     return timestamp;
 }

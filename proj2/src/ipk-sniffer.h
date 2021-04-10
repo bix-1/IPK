@@ -22,7 +22,7 @@ class Opts {
         bool arp = false;
         bool icmp = false;
 
-        const char * get_filter();
+        const std::string get_filter();
 } opts;
 
 void get_opts(int argc, char *argv[]);

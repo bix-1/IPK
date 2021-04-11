@@ -145,14 +145,8 @@ void print_all_devs() {
 void sniff_packets() {
     pcap_t * handle;
     struct bpf_program filter;
-    bpf_u_int32 mask, net;
     char errbuf[PCAP_ERRBUF_SIZE];
 
-    // get netmask
-    if (pcap_lookupnet(opts.device, &net, &mask, errbuf) == -1) {
-        cerr << "Failed to get netmask for device\n";
-        net = 0; mask = 0;
-    }
     // open session in promiscuous mode
     handle = pcap_open_live(opts.device, BUFSIZ, 1, 1000, errbuf);
     if (handle == NULL) error("Failed to open device");
@@ -176,8 +170,7 @@ void handle_packet(
     const struct pcap_pkthdr *header,
     const u_char *packet
 ) {
-    (void)args; // won't be used
-    struct ether_header *eptr = (struct ether_header *) packet;
+    (void)args; // options that won't be used
     // output buffers
     string saddr, daddr, sport, dport;
 
@@ -186,6 +179,7 @@ void handle_packet(
     int length = header->len;
 
     // get packet's info according to its protocol
+    struct ether_header *eptr = (struct ether_header *) packet;
     switch (ntohs(eptr->ether_type)) {
         case ETHERTYPE_IP: {
             // get IP

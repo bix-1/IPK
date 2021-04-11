@@ -48,6 +48,7 @@ void Options::get_opts(int argc, char * argv[]) {
     opterr = 0; // disable getopt error call
     // define valid CL options
     static struct option long_options[] = {
+        {"help", no_argument, 0, 'h'},
         {"device", optional_argument, 0, 'i'},
         {"tcp", no_argument, 0, 't'},
         {"udp", no_argument, 0, 'u'},
@@ -58,10 +59,27 @@ void Options::get_opts(int argc, char * argv[]) {
 
     int opt, opt_index;
     while(true) {
-        opt = getopt_long(argc, argv, "i::p:tun:", long_options, &opt_index);
+        opt = getopt_long(argc, argv, "hi::p:tun:", long_options, &opt_index);
         const char * arg = optarg;
         if (opt == -1) break;
         switch (opt) {
+            // help
+            case 'h':
+                cout << "usage: [--interface | --interface INTERFACE] [-p PORT] [--tcp] [--udp] [--arp] [--icmp] [-n NUM]" << endl << endl;
+                cout << "Packet analyzer for packet capturing, filtering & analysing." << endl << endl;
+                cout << "required arguments:\n";
+                cout << "  -i, --interface\tprint list of active network interfaces & exit\n";
+                cout << "  -i INTERFACE, --interface INTERFACE\n\t\t\tnetwork interface to sniff on\n";
+                cout << "optional arguments:\n";
+                cout << "  -p PORT\t\tlimitation to single port; unlimited by default\n";
+                cout << "  -n NUM\t\tnumber of protocols to be sniffed\n";
+                cout << "{protocol limitations; stackable; unlimited by default}:\n";
+                cout << "  -t, --tcp\t\tTCP protocol\n";
+                cout << "  -u, --udp\t\tUDP protocol\n";
+                cout << "  --arp\t\t\tARP protocol\n";
+                cout << "  --icmp\t\tICMPv4 & ICMPv6 protocols\n";
+                exit(EXIT_SUCCESS);
+
             // opts with argument
             case 'i': case 'p': case 'n':
                 // check if following opt might be current opt's argument
@@ -210,10 +228,8 @@ void handle_packet(
             // get address
             struct ip6_hdr *ip6_h = (struct ip6_hdr*)(packet + sizeof(struct ethhdr));
             char tmp[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
-            saddr = tmp;
-            inet_ntop(AF_INET6, &ip6_h->ip6_dst, tmp, sizeof(tmp));
-            daddr = tmp;
+            saddr = inet_ntop(AF_INET6, &ip6_h->ip6_src, tmp, sizeof(tmp));
+            daddr = inet_ntop(AF_INET6, &ip6_h->ip6_dst, tmp, sizeof(tmp));
             break;
         }
         case ETHERTYPE_ARP: {

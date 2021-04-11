@@ -4,12 +4,6 @@
  * @author Jakub Bartko <xbartk07@stud.fit.vutbr.cz>
  */
 
-/**NOTE
- * https://www.codeproject.com/Questions/463912/Identify-ARP-and-Broadcast-Packets-with-packet-sni
- * LICENSE: https://www.codeproject.com/info/cpol10.aspx
- * ^arph->arp_sha conversion
- */
-
 #include "ipk-sniffer.h"
 #include <iostream>         // I/O
 #include <string>           // string
@@ -233,8 +227,14 @@ void handle_packet(
             break;
         }
         case ETHERTYPE_ARP: {
+            /**
+             * CREDIT {for the two following snprintf functions} TO:
+             * user2233706, May 14, 2013, answer on user2131316,
+             * "How do you convert a MAC address (in an array) to string in C?",
+             * Stack Overflow, May 14, 2013, https://stackoverflow.com/a/16550666.
+             */
             // get address
-            char buf[100];
+            char buf[20];
             snprintf(
                 buf, sizeof(buf),
                 "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -257,6 +257,9 @@ void handle_packet(
                 eptr->ether_dhost[5]
             );
             daddr = buf;
+            /**************************************************
+             *                  END OF CREDIT                 *
+             **************************************************/
             break;
         }
         default:
@@ -324,7 +327,11 @@ string format_timestamp(const timeval * timer) {
 
 string get_addr_v4(uint32_t in) {
     string out;
-    for (int i=0; i<4; i++) {
+    // for each byte:
+    //      shift byte to lowest 8 bits
+    //      get value of byte using mask [0b1111 1111]
+    //      convert to string, append dot
+    for (int i = 0; i < 4; i++) {
         out += to_string(in >> (i*8) & 0xFF);
         out += ".";
     }

@@ -3,6 +3,13 @@
 
 Program ipk-sniffer is a packet analyzer implemented as part of 2nd project variant: ZETA for course IPK at FIT BUT, 2021.
 
+List of submitted files:
+	README
+	Makefile
+	ipk-sniffer.cpp
+	ip-sniffer.h
+	manual.pdf
+
 Use `make` build executable file. RUN WITH ROOT PRIVILEGES.
 
 Usage: [--interface | --interface INTERFACE] [-p PORT] [--tcp] [--udp] [--arp] [--icmp] [-n NUM]

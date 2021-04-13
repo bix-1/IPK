@@ -10,5 +10,12 @@ run: $(EXEC)
 $(EXEC): $(EXEC).cpp
 	$(CXX) $(CXX_FLAGS) $^ -o $@ -lpcap
 
+doc:
+	cd ../doc/ && pdflatex manual.tex
+	cd ../doc/ && bibtex manual.aux
+	cd ../doc/ && pdflatex manual.tex
+	cd ../doc/ && pdflatex manual.tex	
+	cd ../doc/ && rm -f *.aux *.log *.bbl *.blg *.out *.toc
+
 clean:
-	rm -f $(EXEC)
+	rm -f $(EXEC) && cd ../doc/ && rm -f *.aux *.log *.bbl *.blg *.out *.toc manual.pdf

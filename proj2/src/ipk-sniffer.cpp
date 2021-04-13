@@ -60,7 +60,8 @@ void Options::get_opts(int argc, char * argv[]) {
             // help
             case 'h':
                 cout << "usage: [--interface | --interface INTERFACE] [-p PORT] [--tcp] [--udp] [--arp] [--icmp] [-n NUM]" << endl << endl;
-                cout << "Packet analyzer for packet capturing, filtering & analysing." << endl << endl;
+                cout << "Packet analyzer for packet capturing, filtering & analysing.\n\n";
+                cout << "  -h, --help\t\tprint this help\n";
                 cout << "required arguments:\n";
                 cout << "  -i, --interface\tprint list of active network interfaces & exit\n";
                 cout << "  -i INTERFACE, --interface INTERFACE\n\t\t\tnetwork interface to sniff on\n";

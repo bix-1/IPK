@@ -23,7 +23,7 @@ using namespace std;
 int main(int argc, char * argv[]) {
     opts.get_opts(argc, argv);  // CL options
 
-    if (opts.device[0] == '\0')
+    if (opts.device == NULL)
         print_all_devs();
     else
         sniff_packets();
@@ -84,7 +84,7 @@ void Options::get_opts(int argc, char * argv[]) {
                 // handle opts
                 switch (opt) {
                     case 'i':
-                        opts.device = (arg) ? arg : "";
+                        opts.device = (arg) ? arg : NULL;
                         break;
                     case 'p':
                         opts.port = static_cast<string>(arg);
@@ -110,7 +110,6 @@ void Options::get_opts(int argc, char * argv[]) {
     }
     // validation
     if (optind < argc) error("Invalid arguments");
-    if (!opts.device) error("Missing --interface option");
 }
 
 

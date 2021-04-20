@@ -10,7 +10,7 @@
 - Jakub Bartko xbartk07@stud.fit.vutbr.cz
 
 ## Usage
-- `make` to build & `./ipk-sniffer` for usage info
+- `make` to build & `./ipk-sniffer --help` for usage info
 
 ## NOTES
 - **Run using root priviledges**

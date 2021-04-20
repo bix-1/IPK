@@ -13,5 +13,5 @@
 - `make` to build & `./ipk-sniffer --help` for usage info
 
 ## NOTES
-- **Run using root priviledges**
+- **RUN AS ROOT**
 - see non-formatted [README](https://github.com/bix-1/IPK/blob/master/proj2/README) for further details

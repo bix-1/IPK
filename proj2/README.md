@@ -1,4 +1,4 @@
-# 2st IPK Project 2020/21
+# 2nd IPK Project 2020/21
 
 ## Description
 - Implementation of packet sniffer

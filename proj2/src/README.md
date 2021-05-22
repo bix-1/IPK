@@ -1,6 +1,6 @@
-#file: README
+# file: README
 
-#author: Jakub Bartko, xbartk07@stud.fit.vutbr.cz
+# author: Jakub Bartko, xbartk07@stud.fit.vutbr.cz
 
 Program ipk-sniffer is a packet analyzer implemented as part of 2nd project variant: ZETA for course IPK at FIT BUT, 2021.
 

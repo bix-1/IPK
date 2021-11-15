@@ -14,4 +14,4 @@
 
 ## NOTES
 - **RUN AS ROOT**
-- See non-formatted [README](https://github.com/bix-1/IPK/blob/master/proj2/README) for further details
+- See non-formatted [README](https://github.com/bix-1/IPK/blob/master/proj2/src/README.md) for further details
